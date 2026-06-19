@@ -9,17 +9,6 @@ const Polymarket = {
     return res.json();
   },
 
-  // Gamma's legacy /markets and /events list endpoints were sunset
-  // 2026-05-01 in favor of cursor-based /markets/keyset and /events/keyset.
-  // We only ever fetch the first page, so the cursor itself is unused here —
-  // but the response is now `{ data: [...], next_cursor }` instead of a bare
-  // array, and the keyset endpoints don't reliably support `order`/`ascending`,
-  // so callers sort client-side instead.
-  async fetchKeyset(url) {
-    const raw = await this.fetchJSON(url);
-    return Array.isArray(raw) ? raw : raw.data ?? [];
-  },
-
   // Gamma encodes outcomes/outcomePrices/clobTokenIds as JSON strings.
   _parseJSONField(field, fallback) {
     if (Array.isArray(field)) return field;
@@ -117,8 +106,8 @@ const Polymarket = {
       try {
         const tagIds = await this.getTagIdsForSlugs(category.slugs);
         for (const tagId of tagIds) {
-          const events = await this.fetchKeyset(
-            `${CONFIG.ENDPOINTS.GAMMA}/events/keyset?tag_id=${tagId}&active=true&closed=false&limit=20`
+          const events = await this.fetchJSON(
+            `${CONFIG.ENDPOINTS.GAMMA}/events?tag_id=${tagId}&active=true&closed=false&limit=20`
           );
           items.push(...events.map((e) => this.buildItem(e)));
         }
@@ -129,10 +118,9 @@ const Polymarket = {
       // Fall back to keyword search over question text when no tag match exists.
       if (items.length === 0) {
         try {
-          const all = await this.fetchKeyset(
-            `${CONFIG.ENDPOINTS.GAMMA}/markets/keyset?active=true&closed=false&limit=100`
+          const all = await this.fetchJSON(
+            `${CONFIG.ENDPOINTS.GAMMA}/markets?active=true&closed=false&order=volume&ascending=false&limit=100`
           );
-          all.sort((a, b) => Number(b.volume ?? b.volumeNum ?? 0) - Number(a.volume ?? a.volumeNum ?? 0));
           const keywords = category.slugs.map((s) => s.replace(/-/g, ' '));
           const filtered = all.filter((m) =>
             keywords.some((kw) => (m.question ?? '').toLowerCase().includes(kw))
@@ -152,11 +140,10 @@ const Polymarket = {
 
   async fetchTrending() {
     return Cache.getOrFetch('pm_trending', CONFIG.CACHE_TTL.trending, async () => {
-      const all = await this.fetchKeyset(
-        `${CONFIG.ENDPOINTS.GAMMA}/markets/keyset?active=true&closed=false&limit=100`
+      const all = await this.fetchJSON(
+        `${CONFIG.ENDPOINTS.GAMMA}/markets?active=true&closed=false&order=volume&ascending=false&limit=${CONFIG.MARKETS_PER_CATEGORY}`
       );
-      all.sort((a, b) => Number(b.volume ?? b.volumeNum ?? 0) - Number(a.volume ?? a.volumeNum ?? 0));
-      return all.slice(0, CONFIG.MARKETS_PER_CATEGORY).map((m) => this.buildItem(m));
+      return all.map((m) => this.buildItem(m));
     });
   },
 
@@ -192,8 +179,8 @@ const Polymarket = {
       try {
         const tagIds = await this.getTagIdsForSlugs(category.slugs);
         for (const tagId of tagIds) {
-          const events = await this.fetchKeyset(
-            `${CONFIG.ENDPOINTS.GAMMA}/events/keyset?tag_id=${tagId}&closed=true&limit=20`
+          const events = await this.fetchJSON(
+            `${CONFIG.ENDPOINTS.GAMMA}/events?tag_id=${tagId}&closed=true&order=endDate&ascending=false&limit=10`
           );
           markets.push(...events.flatMap((e) => e.markets ?? []));
         }
@@ -203,8 +190,8 @@ const Polymarket = {
 
       if (markets.length === 0) {
         try {
-          const all = await this.fetchKeyset(
-            `${CONFIG.ENDPOINTS.GAMMA}/markets/keyset?closed=true&limit=100`
+          const all = await this.fetchJSON(
+            `${CONFIG.ENDPOINTS.GAMMA}/markets?closed=true&order=endDate&ascending=false&limit=100`
           );
           const keywords = category.slugs.map((s) => s.replace(/-/g, ' '));
           markets = all.filter((m) =>
@@ -215,7 +202,6 @@ const Polymarket = {
         }
       }
 
-      markets.sort((a, b) => new Date(b.endDate ?? b.end_date_iso ?? 0) - new Date(a.endDate ?? a.end_date_iso ?? 0));
       const normalized = markets.map((m) => this.normalizeMarket(m));
       const deduped = Array.from(new Map(normalized.map((m) => [m.id, m])).values());
       return deduped.slice(0, CONFIG.CALIBRATION_LOOKBACK);
@@ -224,11 +210,10 @@ const Polymarket = {
 
   async fetchResolvedTrending() {
     return Cache.getOrFetch('pm_resolved_trending', CONFIG.CACHE_TTL.resolved, async () => {
-      const all = await this.fetchKeyset(
-        `${CONFIG.ENDPOINTS.GAMMA}/markets/keyset?closed=true&limit=100`
+      const all = await this.fetchJSON(
+        `${CONFIG.ENDPOINTS.GAMMA}/markets?closed=true&order=volume&ascending=false&limit=${CONFIG.CALIBRATION_LOOKBACK}`
       );
-      all.sort((a, b) => Number(b.volume ?? b.volumeNum ?? 0) - Number(a.volume ?? a.volumeNum ?? 0));
-      return all.slice(0, CONFIG.CALIBRATION_LOOKBACK).map((m) => this.normalizeMarket(m));
+      return all.map((m) => this.normalizeMarket(m));
     });
   },
 };

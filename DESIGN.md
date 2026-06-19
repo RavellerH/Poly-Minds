@@ -400,21 +400,20 @@ Built in response to a research pass on how to read Polymarket's APIs more
 efficiently and make the narrative text readable by someone with no trading
 background.
 
-- **Gamma keyset migration (`js/polymarket.js`):** Gamma's legacy `/markets`
-  and `/events` list endpoints are sunset 2026-05-01 in favor of cursor-based
-  `/markets/keyset` and `/events/keyset`. All four fetchers
-  (`fetchMarketsForCategory`, `fetchTrending`, `fetchResolvedForCategory`,
-  `fetchResolvedTrending`) now call the `/keyset` paths through a shared
-  `fetchKeyset()` helper that parses the response as `{ data: [...] }` (or a
-  bare array, defensively). We only ever fetch the first page — no pagination
-  beyond it, matching the app's existing single-shot fetch behavior — so the
-  cursor parameter itself is unused and its exact name was never resolved
-  (sources disagree between `after_cursor` and `cursor`; a tracked upstream
-  bug also reports the cursor being ignored server-side). The keyset
-  endpoints' support for `order`/`ascending` query params is unconfirmed, so
-  those params were dropped and replaced with equivalent client-side
-  `.sort()` calls before `.slice()` (by volume, or by `endDate` for resolved
-  markets).
+- **Gamma keyset migration — attempted, then reverted (`js/polymarket.js`):**
+  Gamma's legacy `/markets` and `/events` list endpoints are reportedly sunset
+  2026-05-01 in favor of cursor-based `/markets/keyset` and `/events/keyset`.
+  This was migrated and shipped in one round, but went live with zero
+  successful test against the real API: this sandbox's network egress blocks
+  every host under `polymarket.com`/`gamma-api.polymarket.com` for every fetch
+  tool available (Bash `curl`, WebFetch), including on endpoints that were
+  *not* touched by the change (`/tags` also returns 403), so there was no way
+  to confirm the `/keyset` paths, params, or response shape were correct
+  before deploying. The very next deploy broke live data on the dashboard, so
+  the migration was reverted back to the legacy `/markets`/`/events` calls
+  (confirmed working, with runway until the May 2026 sunset). Re-attempt this
+  migration only with a way to verify against the live API directly — e.g.
+  testing in a real browser — before shipping it again.
 - **Data API field corrections (`js/dataapi.js`):** the v3 round's
   best-effort field guesses are now corrected against Polymarket's documented
   schema:
