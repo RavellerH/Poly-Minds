@@ -451,4 +451,86 @@ in favor of client-side sorting, which is strictly safer regardless).
 
 ---
 
+## 19. v5 — Narrative Automation Layer (GitHub Actions, hourly + daily, Telegram)
+
+Adds a scheduled batch/alert layer on top of the static dashboard, requested
+to monitor narrative shifts across crypto/finance/AI&tech and push alerts +
+digests without standing up a server.
+
+- **Runtime: GitHub Actions only.** No VPS, no external worker. Two
+  scheduled workflows in `.github/workflows/`:
+  - `hourly.yml` (`0 * * * *`): runs `automation/collect.py`.
+  - `daily.yml` (`5 0 * * *`): runs `automation/daily_digest.py`.
+  - Both also support `workflow_dispatch` for manual test runs.
+- **Storage: flat JSON committed to the repo**, not a database. Chosen over
+  SQLite/DuckDB/Postgres because the data volume here is tiny (a few small
+  JSON files per day) and GitHub Actions runners are ephemeral — committing
+  back to the repo is the simplest persistence that needs no external
+  service or secret beyond what's already required. `data/snapshots/{date}/
+  {hour}.json` holds one hourly snapshot (categories + trending, same shape
+  as `js/polymarket.js`'s `normalizeMarket`); `data/digests/{date}.json`
+  holds the daily rollup. Revisit with DuckDB/Postgres only if volume or
+  query complexity grows past what `glob` + `json.load` can handle.
+- **Sources: deliberately limited to endpoints this project has already
+  confirmed work in production** (`automation/lib/gamma.py` mirrors
+  `js/polymarket.js`'s legacy `/markets` and `/events` calls, field-for-field
+  — including the JSON-string-encoded `outcomes`/`outcomePrices` parsing).
+  This was a direct lesson from the keyset migration in §18: that round
+  shipped unverified endpoint guesses straight to production and broke the
+  live dashboard, because this sandbox cannot reach any `polymarket.com`
+  host to test against (confirmed again here — `curl`/WebFetch get blocked
+  by network egress before ever reaching Polymarket's server, on endpoints
+  old and new alike). The collector intentionally does not add any of the
+  other sources floated in planning (Marketaux, Alpha Vantage, Dune, etc.)
+  until each is individually verified against real docs — multiplying
+  unverified API surface area was exactly what caused the §18 outage.
+- **Category scope: `ai`, `crypto`, `finance`** (a subset of the dashboard's
+  8 categories) — matches the "balanced crypto/finance/AI/tech" scope
+  requested, reusing the same tag slugs as `js/config.js`.
+- **Alerting: Telegram only for v1.** WhatsApp was explicitly requested but
+  deferred: Meta's Cloud API requires a verified Business account and, for
+  any message not sent within 24h of the recipient messaging first, a
+  pre-approved message template — meaningfully more setup friction and an
+  approval lead time that Telegram's Bot API doesn't have. `automation/lib/
+  telegram.py` fails soft (logs and returns `False`, never raises) if
+  `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` aren't set as repo secrets, so the
+  scheduled workflows run safely before those secrets are configured.
+- **Alert threshold:** reuses the dashboard's existing `DIVERGENCE_THRESHOLD_PCT`
+  (8 percentage points) as `ALERT_THRESHOLD_PCT` in `collect.py`, comparing
+  each market's probability against its value in the immediately preceding
+  hourly snapshot.
+- **Testing performed:** all four new Python files were validated end-to-end
+  against hand-built mock Gamma responses shaped exactly like the real API's
+  documented/observed format (since, again, this sandbox cannot reach the
+  live API at all) — covering snapshot building, category/trending parsing,
+  cross-snapshot move detection and alert formatting, and the daily rollup.
+  This was not run against the live API before being committed; **the first
+  scheduled or manually-dispatched run in GitHub Actions should be watched
+  closely** (Actions run logs) before trusting the alerts.
+
+### Setup required (not yet done)
+
+1. Create a Telegram bot via `@BotFather`, get the bot token.
+2. Message the bot once, then call `https://api.telegram.org/bot<token>/getUpdates`
+   to read back your `chat_id`.
+3. Add both as repository secrets: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+4. Trigger `hourly.yml` once manually (`workflow_dispatch`) to confirm a
+   snapshot commits and, on the second run, that move detection fires.
+
+### Explicitly deferred
+
+- **WhatsApp delivery** — see above; revisit once Telegram is confirmed
+  working, if still wanted.
+- **Realtime (sub-hour) alerts** — would need either a persistent worker
+  (the CLOB/RTDS WebSockets researched in §17) or much shorter Actions cron
+  intervals (GitHub's minimum schedule granularity is effectively ~5 min in
+  practice, and frequent runs eat into the free Actions minutes budget
+  faster) — out of scope for this round, which targets hourly + daily only,
+  as requested.
+- **Additional sources** (Marketaux, Alpha Vantage, Dune, CoinGecko, etc.) —
+  not added; see "Sources" above. Add one at a time, each verified against
+  real documentation, not aggregated from an unverified list.
+
+---
+
 *Generated for Claude Code. All APIs free. No backend. No wallet. No trading.*
