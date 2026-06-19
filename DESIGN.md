@@ -333,6 +333,67 @@ built around. Revisiting this would mean either a server-side proxy (breaks
 client-side (acceptable risk tradeoff, same pattern as the CryptoPanic key —
 worth reconsidering if multi-venue coverage becomes a priority).
 
+## 17. v3 Additions — Data API & Narrative Depth (post-launch)
+
+Built in response to a survey of additional public Polymarket data not yet
+used. Adds a third data source (`data-api.polymarket.com`, the Data API) and
+restructures market fetching to preserve event-level (negRisk) grouping.
+
+- **Whale Moves feed (`js/dataapi.js`, `DataAPI.fetchWhaleTrades`):** polls
+  the public `/trades` endpoint, filters fills at or above
+  `WHALE_THRESHOLD_USD` ($5,000 default), shows the top `WHALE_FEED_LIMIT`
+  by estimated USD size in a new sidebar panel. Cached 20s.
+- **Top holders → divergence context (`DataAPI.fetchHolders`):** for each
+  divergence alert (price moved without matching news), lazily looks up the
+  top holder on that market's YES token and appends "(top holder: X)" to the
+  alert once it resolves. Limited to `DIVERGENCE_HOLDER_LOOKUP_LIMIT` alerts
+  per refresh so it never blocks the strip's initial render. Cached 5 min.
+- **negRisk / multi-outcome event grouping (`Polymarket.buildItem`):** Gamma
+  events with more than one sub-market (e.g. "Who will win the election?")
+  are no longer flattened into N near-duplicate cards. `buildItem` collapses
+  them into one card carrying all outcomes ranked by probability; the UI
+  renders this as a "MULTI-OUTCOME" card with a leaderboard instead of a
+  single probability number. Single-market events pass through unchanged.
+- **Resolution criteria tooltip:** `description` (market) /
+  `eventDescription` (grouped event) is rendered as a native `title`
+  attribute tooltip on the card, so hovering shows the market's resolution
+  criteria without leaving the page.
+- **Volume momentum:** `volume1wk` / `volume1mo` are read off Gamma (when
+  present) and surfaced as a narrative sentence ("weekly volume is well
+  ahead of its daily pace") when weekly volume runs well above the recent
+  daily pace — a simple, explainable momentum signal rather than a derived
+  statistic.
+- **Competitive / coinflip badge:** Gamma's `competitive` score (0–1, higher
+  = closer to a 50/50 split) renders a "CONTESTED" badge and narrative note
+  at `>= 0.7`.
+- **Comment count:** `commentCount` is read directly off the existing
+  market/event payload (no separate `/comments` call) and shown as a small
+  badge when present.
+
+### Confidence notes — please read before relying on these in production
+
+`data-api.polymarket.com` has no published schema. The normalizers in
+`js/dataapi.js` defensively check several plausible key names per field
+(e.g. `usdcSize ?? value ?? price*size` for trade USD value, `proxyWallet ??
+wallet ?? address` for holder identity) and fail closed to empty results
+rather than throwing, but the exact field names are **unverified** — this
+sandbox's network egress is restricted and blocks all Polymarket hosts
+(confirmed via `curl` returning `403 Host not in allowlist`), so the real
+response shapes could only be inferred from public documentation/community
+references, not observed directly. Verify against the live API once
+deployed and adjust `normalizeTrade`/`normalizeHolder` if any field comes
+back empty/wrong.
+
+### Explicitly deferred (not silently dropped)
+
+- **Leaderboard:** no confirmed public Data API endpoint path is known with
+  confidence — skipped rather than guessing at a URL that may not exist.
+- **Tag hierarchy (parent/child categories):** Gamma's tag relationship
+  field names weren't confident enough to implement without live
+  verification — skipped for this round.
+- **WebSocket real-time feed / Goldsky subgraph:** bigger architectural
+  changes, already tracked under Phase 2+ in §13.
+
 ---
 
 *Generated for Claude Code. All APIs free. No backend. No wallet. No trading.*

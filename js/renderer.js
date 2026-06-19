@@ -107,11 +107,20 @@ const Renderer = {
   },
 
   renderMarketCard(market, allMarkets) {
+    if (market.isGroup) return this.renderGroupedCard(market);
+
     const pct = Math.round(market.probability * 100);
     const sentence = Narrative.buildMarketSentence(market);
     const tags = market.tags.slice(0, 3)
       .map((t) => `<span class="px-1.5 py-0.5 rounded bg-[#141925] text-[10px] text-slate-500 font-mono uppercase">${this.escapeHTML(t)}</span>`)
       .join('');
+    const competitiveBadge = market.competitive != null && market.competitive >= 0.7
+      ? `<span class="px-1.5 py-0.5 rounded bg-violet-950/50 text-[10px] text-violet-300 font-mono uppercase">CONTESTED</span>`
+      : '';
+    const commentBadge = market.commentCount > 0
+      ? `<span class="text-[10px] text-slate-600 font-mono">&#128172; ${market.commentCount}</span>`
+      : '';
+    const tooltip = market.description ? ` title="${this.escapeHTML(market.description.slice(0, 220))}"` : '';
 
     const related = Narrative.findRelated(market, allMarkets);
     const relatedChips = related
@@ -119,7 +128,7 @@ const Renderer = {
       .join('');
 
     return `
-      <div data-market-id="${market.id}" class="market-card block rounded border border-[#1a1f2b] bg-[#0a0d14] p-2.5">
+      <div data-market-id="${market.id}" class="market-card block rounded border border-[#1a1f2b] bg-[#0a0d14] p-2.5"${tooltip}>
         <a href="${market.url}" target="_blank" rel="noopener" class="block">
           <div class="text-[13px] text-slate-200 font-medium line-clamp-2 mb-1.5">${this.escapeHTML(market.question)}</div>
           <div class="flex items-baseline gap-2 mb-1">
@@ -132,11 +141,48 @@ const Renderer = {
         <div class="flex items-center gap-2 text-[11px] text-slate-600 font-mono mb-1.5">
           <span>VOL $${this.formatNumber(market.volume)}</span>
           <span>LIQ $${this.formatNumber(market.liquidity)}</span>
+          ${commentBadge}
           ${market.endDate ? `<span class="ml-auto">${new Date(market.endDate).toLocaleDateString()}</span>` : ''}
         </div>
         <p class="text-[11px] text-slate-500 mb-1.5 leading-snug">${this.escapeHTML(sentence)}</p>
-        <div class="flex gap-1 flex-wrap mb-1">${tags}</div>
+        <div class="flex gap-1 flex-wrap mb-1">${tags}${competitiveBadge}</div>
         ${relatedChips ? `<div class="flex gap-1 flex-wrap pt-1 border-t border-[#1a1f2b]">${relatedChips}</div>` : ''}
+      </div>`;
+  },
+
+  // negRisk multi-outcome events ("Who will win X") collapse into one card
+  // with a ranked outcome breakdown instead of N near-duplicate cards.
+  renderGroupedCard(market) {
+    const tooltip = market.eventDescription ? ` title="${this.escapeHTML(market.eventDescription.slice(0, 220))}"` : '';
+    const outcomeRows = market.outcomes
+      .slice(0, 5)
+      .map((o) => {
+        const pct = Math.round(o.probability * 100);
+        const label = o.groupItemTitle || o.question;
+        return `
+          <div class="flex items-center gap-2 text-[11px]">
+            <span class="text-slate-400 truncate flex-1">${this.escapeHTML(label)}</span>
+            <span class="font-mono font-semibold ${this.probColorClass(o.probability)} w-10 text-right">${pct}%</span>
+          </div>`;
+      })
+      .join('');
+    const tags = market.tags.slice(0, 3)
+      .map((t) => `<span class="px-1.5 py-0.5 rounded bg-[#141925] text-[10px] text-slate-500 font-mono uppercase">${this.escapeHTML(t)}</span>`)
+      .join('');
+
+    return `
+      <div data-market-id="${market.id}" class="market-card block rounded border border-[#1a1f2b] bg-[#0a0d14] p-2.5"${tooltip}>
+        <a href="${market.url}" target="_blank" rel="noopener" class="block mb-1.5">
+          <span class="inline-block px-1.5 py-0.5 rounded bg-indigo-950/50 text-[10px] text-indigo-300 font-mono uppercase mb-1">MULTI-OUTCOME</span>
+          <div class="text-[13px] text-slate-200 font-medium line-clamp-2">${this.escapeHTML(market.question)}</div>
+        </a>
+        <div class="flex flex-col gap-1 mb-1.5">${outcomeRows}</div>
+        <div class="flex items-center gap-2 text-[11px] text-slate-600 font-mono mb-1.5">
+          <span>VOL $${this.formatNumber(market.volume)}</span>
+          <span>${market.outcomes.length} OUTCOMES</span>
+          ${market.endDate ? `<span class="ml-auto">${new Date(market.endDate).toLocaleDateString()}</span>` : ''}
+        </div>
+        <div class="flex gap-1 flex-wrap">${tags}</div>
       </div>`;
   },
 
@@ -210,6 +256,31 @@ const Renderer = {
       </li>`;
   },
 
+  renderWhaleTrade(t) {
+    const sideColor = /yes|buy/i.test(t.outcome) ? 'text-emerald-400' : 'text-rose-400';
+    const who = t.pseudonym ?? (t.wallet ? `${t.wallet.slice(0, 6)}…${t.wallet.slice(-4)}` : 'anon');
+    return `
+      <li class="border-b border-[#141925] pb-2 mb-2 last:border-0">
+        <div class="text-[13px] text-slate-300 line-clamp-2 leading-snug">${this.escapeHTML(t.market)}</div>
+        <div class="flex items-center gap-2 mt-1 text-[11px] text-slate-600 font-mono">
+          <span class="${sideColor} uppercase">${this.escapeHTML(t.outcome || '')}</span>
+          <span>&middot;</span>
+          <span class="text-slate-300">$${this.formatNumber(t.usdValue)}</span>
+          <span>&middot;</span>
+          <span>${this.escapeHTML(who)}</span>
+          <span class="ml-auto">${this.timeAgo(new Date(t.timestamp).toISOString())}</span>
+        </div>
+      </li>`;
+  },
+
+  renderWhaleFeed(el, trades) {
+    if (!trades.length) {
+      el.innerHTML = `<div class="text-slate-500 text-sm font-mono">NO WHALE TRADES &ge; $${this.formatNumber(CONFIG.WHALE_THRESHOLD_USD)} DETECTED.</div>`;
+      return;
+    }
+    el.innerHTML = `<ul>${trades.map((t) => this.renderWhaleTrade(t)).join('')}</ul>`;
+  },
+
   renderNewsFeed(el, news, allMarkets) {
     if (!news.length) {
       el.innerHTML = `<div class="text-slate-500 text-sm font-mono">NO NEWS AVAILABLE.</div>`;
@@ -232,9 +303,18 @@ const Renderer = {
     el.innerHTML = divergences
       .map(({ market, changePct }) => {
         const sign = changePct > 0 ? '+' : '';
-        return `<span class="mr-6">&#9889; ${this.escapeHTML(market.question)} moved ${sign}${changePct}% — no news found</span>`;
+        return `<span class="mr-6" data-divergence-id="${market.id}">&#9889; ${this.escapeHTML(market.question)} moved ${sign}${changePct}% — no news found<span data-holder-note-id="${market.id}"></span></span>`;
       })
       .join('');
+  },
+
+  // Lazily appended once a top-holder lookup resolves for a divergence alert.
+  renderDivergenceHolderNote(marketId, holders) {
+    const el = document.querySelector(`[data-holder-note-id="${marketId}"]`);
+    if (!el || !holders.length) return;
+    const top = holders[0];
+    const who = top.pseudonym ?? (top.wallet ? `${top.wallet.slice(0, 6)}…` : 'a top holder');
+    el.innerHTML = ` (top holder: ${this.escapeHTML(who)})`;
   },
 
   renderStaleBadge(el, isStale) {

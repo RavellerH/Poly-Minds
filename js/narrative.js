@@ -7,7 +7,13 @@ const Narrative = {
     const liquidityNote = market.liquidity > 0
       ? ` Backed by $${Renderer.formatNumber(market.liquidity)} liquidity.`
       : '';
-    return `Markets give ${pct}% odds: "${market.question}" — probability ${trend} ${pct}% in the last 24h.${liquidityNote}`;
+    const momentumNote = market.volume1wk > 0 && market.volume1wk > market.volume24h * 3
+      ? ` Weekly volume ($${Renderer.formatNumber(market.volume1wk)}) is well ahead of its daily pace — interest is building.`
+      : '';
+    const contestedNote = market.competitive != null && market.competitive >= 0.7
+      ? ' This one is a tightly contested, near-coinflip market.'
+      : '';
+    return `Markets give ${pct}% odds: "${market.question}" — probability ${trend} ${pct}% in the last 24h.${liquidityNote}${momentumNote}${contestedNote}`;
   },
 
   // Related markets: same category, excluding the one being shown.

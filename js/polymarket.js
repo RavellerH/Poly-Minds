@@ -33,10 +33,13 @@ const Polymarket = {
       id: raw.id ?? raw.conditionId,
       conditionId: raw.conditionId,
       question: raw.question ?? raw.title ?? 'Untitled market',
+      description: raw.description ?? null,
       probability,
       change24h: typeof raw.oneDayPriceChange === 'number' ? raw.oneDayPriceChange : 0,
       volume: Number(raw.volume ?? raw.volumeNum ?? 0),
       volume24h: Number(raw.volume24hr ?? 0),
+      volume1wk: Number(raw.volume1wk ?? raw.volume1Wk ?? 0),
+      volume1mo: Number(raw.volume1mo ?? raw.volume1Mo ?? 0),
       liquidity: Number(raw.liquidity ?? raw.liquidityNum ?? 0),
       endDate: raw.endDate ?? raw.end_date_iso ?? null,
       slug: raw.slug,
@@ -44,6 +47,41 @@ const Polymarket = {
       url: raw.slug ? `https://polymarket.com/event/${raw.slug}` : 'https://polymarket.com',
       yesTokenId: yesIdx >= 0 ? clobTokenIds[yesIdx] : clobTokenIds[0],
       closed: Boolean(raw.closed),
+      // competitive: Gamma's 0-1 "how contested" score — higher means closer to a coinflip.
+      competitive: typeof raw.competitive === 'number' ? raw.competitive : null,
+      commentCount: Number(raw.commentCount ?? raw.comment_count ?? 0),
+      negRisk: Boolean(raw.negRisk),
+      groupItemTitle: raw.groupItemTitle ?? null,
+    };
+  },
+
+  // Wraps a Gamma event into a card-ready item. Single-market events pass
+  // through as-is; negRisk multi-outcome events (e.g. "Who will win X") are
+  // collapsed into one item carrying all outcomes, ranked by probability,
+  // so the UI can render a leaderboard instead of N near-duplicate cards.
+  buildItem(rawEvent) {
+    const subMarkets = Array.isArray(rawEvent.markets) ? rawEvent.markets : [rawEvent];
+    if (subMarkets.length <= 1) {
+      return { ...this.normalizeMarket(subMarkets[0] ?? rawEvent), isGroup: false, outcomes: [] };
+    }
+
+    const outcomes = subMarkets.map((m) => this.normalizeMarket(m)).sort((a, b) => b.probability - a.probability);
+    const lead = outcomes[0];
+    const totalVolume = outcomes.reduce((sum, m) => sum + m.volume, 0);
+    const totalLiquidity = outcomes.reduce((sum, m) => sum + m.liquidity, 0);
+
+    return {
+      ...lead,
+      id: rawEvent.id ?? lead.id,
+      question: rawEvent.title ?? rawEvent.question ?? lead.question,
+      volume: totalVolume,
+      liquidity: totalLiquidity,
+      slug: rawEvent.slug ?? lead.slug,
+      url: rawEvent.slug ? `https://polymarket.com/event/${rawEvent.slug}` : lead.url,
+      eventDescription: rawEvent.description ?? null,
+      isGroup: true,
+      negRisk: true,
+      outcomes,
     };
   },
 
@@ -64,36 +102,36 @@ const Polymarket = {
   async fetchMarketsForCategory(category) {
     const cacheKey = `pm_markets_${category.key}`;
     return Cache.getOrFetch(cacheKey, CONFIG.CACHE_TTL.markets, async () => {
-      let markets = [];
+      let items = [];
       try {
         const tagIds = await this.getTagIdsForSlugs(category.slugs);
         for (const tagId of tagIds) {
           const events = await this.fetchJSON(
             `${CONFIG.ENDPOINTS.GAMMA}/events?tag_id=${tagId}&active=true&closed=false&limit=20`
           );
-          markets.push(...events.flatMap((e) => e.markets ?? []));
+          items.push(...events.map((e) => this.buildItem(e)));
         }
       } catch {
-        markets = [];
+        items = [];
       }
 
       // Fall back to keyword search over question text when no tag match exists.
-      if (markets.length === 0) {
+      if (items.length === 0) {
         try {
           const all = await this.fetchJSON(
             `${CONFIG.ENDPOINTS.GAMMA}/markets?active=true&closed=false&order=volume&ascending=false&limit=100`
           );
           const keywords = category.slugs.map((s) => s.replace(/-/g, ' '));
-          markets = all.filter((m) =>
+          const filtered = all.filter((m) =>
             keywords.some((kw) => (m.question ?? '').toLowerCase().includes(kw))
           );
+          items = filtered.map((m) => this.buildItem(m));
         } catch {
-          markets = [];
+          items = [];
         }
       }
 
-      const normalized = markets.map((m) => this.normalizeMarket(m));
-      const deduped = Array.from(new Map(normalized.map((m) => [m.id, m])).values());
+      const deduped = Array.from(new Map(items.map((m) => [m.id, m])).values());
       return deduped
         .sort((a, b) => b.volume - a.volume)
         .slice(0, CONFIG.MARKETS_PER_CATEGORY);
@@ -105,7 +143,7 @@ const Polymarket = {
       const all = await this.fetchJSON(
         `${CONFIG.ENDPOINTS.GAMMA}/markets?active=true&closed=false&order=volume&ascending=false&limit=${CONFIG.MARKETS_PER_CATEGORY}`
       );
-      return all.map((m) => this.normalizeMarket(m));
+      return all.map((m) => this.buildItem(m));
     });
   },
 

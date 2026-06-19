@@ -6,6 +6,7 @@ const CONFIG = {
   ENDPOINTS: {
     GAMMA: 'https://gamma-api.polymarket.com',
     CLOB: 'https://clob.polymarket.com',
+    DATA_API: 'https://data-api.polymarket.com',
     POLYMARKETSCAN: 'https://gzydspfquuaudqeztorw.supabase.co/functions/v1/public-api',
     CRYPTOPANIC: 'https://cryptopanic.com/api/v1/posts/',
     RSS2JSON: 'https://api.rss2json.com/v1/api.json',
@@ -43,10 +44,15 @@ const CONFIG = {
     history: 300 * 1000,
     book: 45 * 1000,
     resolved: 10 * 60 * 1000,
+    trades: 20 * 1000,
+    holders: 5 * 60 * 1000,
   },
 
   DIVERGENCE_THRESHOLD_PCT: 8,
   MARKETS_PER_CATEGORY: 12,
   SPREAD_LOOKUP_LIMIT: 6, // top-N cards per category get a live bid/ask spread badge
   CALIBRATION_LOOKBACK: 8, // resolved markets sampled per category for the track-record score
+  WHALE_THRESHOLD_USD: 5000, // min estimated fill size to surface in the Whale Moves feed
+  WHALE_FEED_LIMIT: 12,
+  DIVERGENCE_HOLDER_LOOKUP_LIMIT: 4, // top-N divergence alerts get a lazy top-holder lookup
 };

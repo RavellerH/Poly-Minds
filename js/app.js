@@ -6,6 +6,7 @@ const App = {
     categoryData: [], // [{ key, label, markets }]
     trendingMarkets: [],
     news: [],
+    whaleTrades: [],
     stale: false,
   },
 
@@ -19,6 +20,7 @@ const App = {
       pulseBar: document.getElementById('pulse-bar'),
       marketGrid: document.getElementById('market-grid'),
       newsFeed: document.getElementById('news-feed'),
+      whaleFeed: document.getElementById('whale-feed'),
       narrativeSummary: document.getElementById('narrative-summary'),
       calibrationPanel: document.getElementById('calibration-panel'),
       divergenceStrip: document.getElementById('divergence-strip'),
@@ -104,6 +106,20 @@ const App = {
     }
   },
 
+  // Top-holder lookups are lazy and per-divergence-alert, same pattern as
+  // loadCardEnrichment — never blocks the initial divergence strip render.
+  async loadDivergenceEnrichment(divergences) {
+    const targets = divergences.slice(0, CONFIG.DIVERGENCE_HOLDER_LOOKUP_LIMIT);
+    await Promise.allSettled(
+      targets.map(async ({ market }) => {
+        const result = await Promise.allSettled([DataAPI.fetchHolders(market.yesTokenId, 3)]);
+        if (result[0].status === 'fulfilled') {
+          Renderer.renderDivergenceHolderNote(market.id, result[0].value);
+        }
+      })
+    );
+  },
+
   allKnownMarkets() {
     const fromCategories = this.state.categoryData.flatMap((c) => c.markets);
     return [...fromCategories, ...this.state.trendingMarkets];
@@ -113,7 +129,7 @@ const App = {
     this.els.refreshSpinner?.classList.remove('hidden');
     let stale = false;
 
-    const [categoryResults, trendingResult, newsResult] = await Promise.allSettled([
+    const [categoryResults, trendingResult, newsResult, whaleResult] = await Promise.allSettled([
       Promise.allSettled(
         CONFIG.INTEREST_TAGS.primary.map(async (cat) => {
           const result = await Polymarket.fetchMarketsForCategory(cat);
@@ -123,6 +139,7 @@ const App = {
       ),
       Polymarket.fetchTrending(),
       News.fetchAll(),
+      DataAPI.fetchWhaleTrades(),
     ]);
 
     if (categoryResults.status === 'fulfilled') {
@@ -140,6 +157,12 @@ const App = {
       this.state.news = newsResult.value.value;
       if (newsResult.value.stale) stale = true;
     }
+    if (whaleResult.status === 'fulfilled') {
+      this.state.whaleTrades = whaleResult.value.value;
+      if (whaleResult.value.stale) stale = true;
+    } else {
+      this.state.whaleTrades = [];
+    }
     this.state.stale = stale;
 
     this.renderAll();
@@ -154,10 +177,12 @@ const App = {
 
     const allMarkets = this.allKnownMarkets();
     Renderer.renderNewsFeed(this.els.newsFeed, this.state.news, allMarkets);
+    Renderer.renderWhaleFeed(this.els.whaleFeed, this.state.whaleTrades);
     Renderer.renderNarrativeSummary(this.els.narrativeSummary, this.state.categoryData);
 
     const divergences = Narrative.findDivergences(allMarkets, this.state.news);
     Renderer.renderDivergenceStrip(this.els.divergenceStrip, divergences);
+    this.loadDivergenceEnrichment(divergences);
 
     Renderer.renderStaleBadge(this.els.staleBadge, this.state.stale);
 
