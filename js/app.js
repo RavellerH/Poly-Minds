@@ -10,14 +10,17 @@ const App = {
   },
 
   els: {},
+  _calibrationToken: 0, // guards against a stale async calibration result landing after a tab switch
 
   init() {
     this.els = {
+      ticker: document.getElementById('ticker-track'),
       timestamp: document.getElementById('last-updated'),
       pulseBar: document.getElementById('pulse-bar'),
       marketGrid: document.getElementById('market-grid'),
       newsFeed: document.getElementById('news-feed'),
       narrativeSummary: document.getElementById('narrative-summary'),
+      calibrationPanel: document.getElementById('calibration-panel'),
       divergenceStrip: document.getElementById('divergence-strip'),
       staleBadge: document.getElementById('stale-badge'),
       refreshSpinner: document.getElementById('refresh-spinner'),
@@ -35,11 +38,17 @@ const App = {
   setActiveCategory(key) {
     this.state.activeCategory = key;
     this.els.tabs.forEach((tab) => {
-      tab.classList.toggle('bg-indigo-600', tab.dataset.categoryTab === key);
-      tab.classList.toggle('text-white', tab.dataset.categoryTab === key);
-      tab.classList.toggle('text-slate-400', tab.dataset.categoryTab !== key);
+      const active = tab.dataset.categoryTab === key;
+      tab.classList.toggle('bg-emerald-600', active);
+      tab.classList.toggle('text-black', active);
+      tab.classList.toggle('text-slate-400', !active);
     });
     this.renderActiveGrid();
+    this.loadCalibrationForActiveCategory();
+  },
+
+  getActiveCategoryConfig() {
+    return CONFIG.INTEREST_TAGS.primary.find((c) => c.key === this.state.activeCategory) ?? null;
   },
 
   getActiveMarkets() {
@@ -51,7 +60,48 @@ const App = {
   },
 
   renderActiveGrid() {
-    Renderer.renderMarketGrid(this.els.marketGrid, this.getActiveMarkets());
+    const markets = this.getActiveMarkets();
+    Renderer.renderMarketGrid(this.els.marketGrid, markets, this.allKnownMarkets());
+    this.loadCardEnrichment(markets);
+  },
+
+  // Sparklines + spread badges are fetched lazily per visible card so a slow
+  // history/order-book call never blocks the initial grid paint.
+  async loadCardEnrichment(markets) {
+    const targets = markets.slice(0, CONFIG.SPREAD_LOOKUP_LIMIT);
+    await Promise.allSettled(
+      targets.map(async (m) => {
+        const [historyResult, spreadResult] = await Promise.allSettled([
+          Polymarket.fetchPriceHistory(m.conditionId, '1d'),
+          Polymarket.fetchSpread(m.yesTokenId),
+        ]);
+        if (historyResult.status === 'fulfilled') {
+          Renderer.renderSparkline(m.id, historyResult.value.value);
+        }
+        if (spreadResult.status === 'fulfilled') {
+          Renderer.renderSpread(m.id, spreadResult.value);
+        }
+      })
+    );
+  },
+
+  async loadCalibrationForActiveCategory() {
+    const token = ++this._calibrationToken;
+    this.els.calibrationPanel.textContent = 'Checking recently resolved markets...';
+
+    try {
+      const catConfig = this.getActiveCategoryConfig();
+      const resolved = catConfig
+        ? (await Polymarket.fetchResolvedForCategory(catConfig)).value
+        : (await Polymarket.fetchResolvedTrending()).value;
+
+      const calibration = await Narrative.computeCalibration(resolved);
+      if (token !== this._calibrationToken) return; // user switched tabs while this was in flight
+      Renderer.renderCalibrationPanel(this.els.calibrationPanel, calibration);
+    } catch {
+      if (token !== this._calibrationToken) return;
+      Renderer.renderCalibrationPanel(this.els.calibrationPanel, { sampleSize: 0, score: null, items: [] });
+    }
   },
 
   allKnownMarkets() {
@@ -98,6 +148,7 @@ const App = {
 
   renderAll() {
     Renderer.renderTimestamp(this.els.timestamp);
+    Renderer.renderTicker(this.els.ticker, this.state.trendingMarkets);
     Renderer.renderPulseBar(this.els.pulseBar, this.state.categoryData);
     this.renderActiveGrid();
 
@@ -109,6 +160,8 @@ const App = {
     Renderer.renderDivergenceStrip(this.els.divergenceStrip, divergences);
 
     Renderer.renderStaleBadge(this.els.staleBadge, this.state.stale);
+
+    this.loadCalibrationForActiveCategory();
   },
 };
 

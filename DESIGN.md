@@ -301,4 +301,38 @@ The only optional key needed:
 
 ---
 
+## 16. v2 Additions (post-launch)
+
+Built after initial feedback that the layout was too sparse and the visual
+style needed more density and personality.
+
+- **Visual style:** switched from a generic dark Tailwind card layout to a
+  denser terminal/Bloomberg-style theme — `JetBrains Mono` for numbers, an
+  auto-scrolling top ticker tape of trending markets, tighter card spacing,
+  8 category tabs instead of 4 (added Politics, Sports, Pop Culture, Science).
+- **Sparklines:** each card renders a 24h price-history mini line chart via
+  Chart.js (CDN), drawn lazily for the top `SPREAD_LOOKUP_LIMIT` visible cards
+  so a slow history call never blocks the initial grid paint.
+- **Bid/ask spread badge:** live order-book lookup (`/book?token_id=`) per
+  card, same lazy-load pattern as sparklines, cached 45s.
+- **Related markets:** each card shows up to 3 same-tag market chips.
+- **Track record / calibration panel:** for the active category, fetches the
+  last `CALIBRATION_LOOKBACK` resolved markets and checks whether the
+  market's own last live price before close called the eventual outcome
+  correctly. Pure client-side computation against CLOB `prices-history` —
+  no stored history needed, since closed markets keep their pre-resolution
+  history queryable for a retention window.
+
+### Known gap: Kalshi
+
+Adding Kalshi markets alongside Polymarket was considered but skipped —
+Kalshi's API requires authenticated requests and doesn't reliably support
+browser CORS, which breaks the no-backend/no-key constraint this project is
+built around. Revisiting this would mean either a server-side proxy (breaks
+"static, free, no backend") or asking users to supply a personal Kalshi key
+client-side (acceptable risk tradeoff, same pattern as the CryptoPanic key —
+worth reconsidering if multi-venue coverage becomes a priority).
+
+---
+
 *Generated for Claude Code. All APIs free. No backend. No wallet. No trading.*
