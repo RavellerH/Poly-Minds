@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Polymarket Pulse</title>
+  <meta name="description" content="Narrative-first dashboard for AI, Crypto, Hyperliquid, and Finance prediction markets." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="bg-[#0b0f17] text-slate-200 min-h-screen">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-950/80 sticky top-0 z-10 backdrop-blur">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <h1 class="text-lg font-semibold text-white">Polymarket Pulse</h1>
+        <span id="stale-badge" class="hidden text-xs px-2 py-0.5 rounded-full bg-amber-900/60 text-amber-300">
+          &#9888; cached data
+        </span>
+      </div>
+      <div class="flex items-center gap-3 text-xs text-slate-500">
+        <span id="refresh-spinner" class="hidden"></span>
+        <span id="last-updated">Loading...</span>
+      </div>
+    </div>
+    <nav class="max-w-7xl mx-auto px-4 pb-3 flex gap-2 overflow-x-auto">
+      <button data-category-tab="ai" class="px-3 py-1.5 rounded-md text-sm text-slate-400 hover:text-white transition-colors">AI & Tech</button>
+      <button data-category-tab="crypto" class="px-3 py-1.5 rounded-md text-sm text-slate-400 hover:text-white transition-colors">Crypto</button>
+      <button data-category-tab="hyperliquid" class="px-3 py-1.5 rounded-md text-sm text-slate-400 hover:text-white transition-colors">Hyperliquid</button>
+      <button data-category-tab="finance" class="px-3 py-1.5 rounded-md text-sm text-slate-400 hover:text-white transition-colors">Finance</button>
+      <button data-category-tab="trending" class="px-3 py-1.5 rounded-md text-sm bg-indigo-600 text-white transition-colors">Trending</button>
+    </nav>
+  </header>
+
+  <!-- Divergence alert strip -->
+  <div id="divergence-strip" class="hidden bg-amber-900/30 text-amber-300 text-xs px-4 py-2 border-b border-amber-800/50"></div>
+
+  <main class="max-w-7xl mx-auto px-4 py-6 flex flex-col gap-6">
+
+    <!-- Pulse score bar -->
+    <section id="pulse-bar" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"></section>
+
+    <!-- Narrative summary -->
+    <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+      <h2 class="text-sm font-medium text-slate-400 mb-2">Narrative Summary</h2>
+      <p id="narrative-summary" class="text-sm text-slate-300 leading-relaxed">Loading market narrative...</p>
+    </section>
+
+    <!-- Main content: market grid + news sidebar -->
+    <section class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+      <div id="market-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 content-start"></div>
+
+      <aside class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 h-fit">
+        <h2 class="text-sm font-medium text-slate-400 mb-3">News Feed</h2>
+        <div id="news-feed"></div>
+      </aside>
+    </section>
+  </main>
+
+  <footer class="max-w-7xl mx-auto px-4 py-6 text-xs text-slate-600">
+    Data: Polymarket Gamma/CLOB API &middot; RSS via rss2json &middot; No trading, no wallet, no backend.
+  </footer>
+
+  <script src="js/config.js"></script>
+  <script src="js/cache.js"></script>
+  <script src="js/polymarket.js"></script>
+  <script src="js/news.js"></script>
+  <script src="js/narrative.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
