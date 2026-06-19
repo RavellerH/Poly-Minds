@@ -12,18 +12,20 @@ const DataAPI = {
   },
 
   normalizeTrade(raw) {
-    const price = Number(raw.price ?? raw.p ?? 0);
-    const size = Number(raw.size ?? raw.amount ?? raw.s ?? 0);
-    const tsRaw = Number(raw.timestamp ?? raw.t ?? 0);
+    const price = Number(raw.price ?? 0);
+    const size = Number(raw.size ?? 0);
+    const tsRaw = Number(raw.timestamp ?? 0);
     return {
-      id: raw.transactionHash ?? raw.id ?? `${tsRaw}-${price}-${size}`,
-      market: raw.title ?? raw.question ?? raw.market ?? 'Unknown market',
+      id: raw.transactionHash ?? `${tsRaw}-${price}-${size}`,
+      market: raw.title ?? raw.slug ?? 'Unknown market',
       slug: raw.slug ?? raw.eventSlug ?? null,
-      outcome: raw.outcomeName ?? raw.outcome ?? raw.side ?? '',
+      outcome: raw.outcome ?? '',
+      side: raw.side ?? '',
       price,
       size,
-      usdValue: Number(raw.usdcSize ?? raw.value ?? (price * size)),
-      wallet: raw.proxyWallet ?? raw.wallet ?? raw.maker ?? null,
+      // /trades has no usdValue field — estimate USD size as price * size (shares).
+      usdValue: price * size,
+      wallet: raw.proxyWallet ?? null,
       pseudonym: raw.pseudonym ?? raw.name ?? null,
       timestamp: tsRaw > 0 ? (tsRaw < 1e12 ? tsRaw * 1000 : tsRaw) : Date.now(),
     };
@@ -49,22 +51,25 @@ const DataAPI = {
 
   normalizeHolder(raw) {
     return {
-      wallet: raw.proxyWallet ?? raw.wallet ?? raw.address ?? null,
-      pseudonym: raw.pseudonym ?? raw.name ?? null,
-      amount: Number(raw.amount ?? raw.shares ?? raw.balance ?? 0),
-      outcome: raw.outcomeName ?? raw.outcome ?? null,
+      wallet: raw.proxyWallet ?? null,
+      pseudonym: raw.pseudonym ?? raw.name ?? raw.displayUsernamePublic ?? null,
+      amount: Number(raw.amount ?? 0),
+      outcomeIndex: raw.outcomeIndex ?? null,
     };
   },
 
-  // Top holders for a market's token, used to add concentration context to
+  // Top holders for a market, used to add concentration context to
   // divergence alerts. Lazily called per-card, never blocks initial render.
-  async fetchHolders(tokenId, limit = 5) {
-    if (!tokenId) return [];
-    const cacheKey = `pm_holders_${tokenId}`;
+  // /holders takes the market's conditionId (not a CLOB token id) and
+  // returns one holder group per outcome token: [{ token, holders: [...] }].
+  async fetchHolders(conditionId, limit = 5) {
+    if (!conditionId) return [];
+    const cacheKey = `pm_holders_${conditionId}`;
     const { value } = await Cache.getOrFetch(cacheKey, CONFIG.CACHE_TTL.holders, async () => {
-      const raw = await this.fetchJSON(`${CONFIG.ENDPOINTS.DATA_API}/holders?market=${tokenId}&limit=${limit}`);
-      const list = Array.isArray(raw) ? raw : raw.data ?? raw.holders ?? [];
-      return list.map((h) => this.normalizeHolder(h));
+      const raw = await this.fetchJSON(`${CONFIG.ENDPOINTS.DATA_API}/holders?market=${conditionId}&limit=${limit}`);
+      const groups = Array.isArray(raw) ? raw : raw.data ?? [];
+      const holders = groups.flatMap((g) => g.holders ?? []).map((h) => this.normalizeHolder(h));
+      return holders.sort((a, b) => b.amount - a.amount).slice(0, limit);
     });
     return value;
   },

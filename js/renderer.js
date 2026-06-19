@@ -115,7 +115,7 @@ const Renderer = {
       .map((t) => `<span class="px-1.5 py-0.5 rounded bg-[#141925] text-[10px] text-slate-500 font-mono uppercase">${this.escapeHTML(t)}</span>`)
       .join('');
     const competitiveBadge = market.competitive != null && market.competitive >= 0.7
-      ? `<span class="px-1.5 py-0.5 rounded bg-violet-950/50 text-[10px] text-violet-300 font-mono uppercase">CONTESTED</span>`
+      ? `<span class="px-1.5 py-0.5 rounded bg-violet-950/50 text-[10px] text-violet-300 font-mono uppercase" title="Traders are split close to 50/50 on this one — a near coin-flip.">CONTESTED</span>`
       : '';
     const commentBadge = market.commentCount > 0
       ? `<span class="text-[10px] text-slate-600 font-mono">&#128172; ${market.commentCount}</span>`
@@ -134,13 +134,13 @@ const Renderer = {
           <div class="flex items-baseline gap-2 mb-1">
             <span class="text-2xl font-mono font-bold ${this.probColorClass(market.probability)}">${pct}%</span>
             <span class="font-mono text-xs">${this.changeBadge(market.change24h)}</span>
-            <span data-spread-id="${market.id}" class="font-mono text-[10px] text-slate-600 ml-auto"></span>
+            <span data-spread-id="${market.id}" class="font-mono text-[10px] text-slate-600 ml-auto" title="Gap between the best buy and sell price right now — a narrower spread means it's cheaper to trade in and out."></span>
           </div>
         </a>
         <canvas data-spark-id="${market.id}" class="sparkline-canvas mb-1.5"></canvas>
         <div class="flex items-center gap-2 text-[11px] text-slate-600 font-mono mb-1.5">
-          <span>VOL $${this.formatNumber(market.volume)}</span>
-          <span>LIQ $${this.formatNumber(market.liquidity)}</span>
+          <span title="Total amount ever traded on this market.">VOL $${this.formatNumber(market.volume)}</span>
+          <span title="Money sitting in the order book right now, ready to trade — more liquidity means it's easier to buy/sell without moving the price.">LIQ $${this.formatNumber(market.liquidity)}</span>
           ${commentBadge}
           ${market.endDate ? `<span class="ml-auto">${new Date(market.endDate).toLocaleDateString()}</span>` : ''}
         </div>
@@ -173,7 +173,7 @@ const Renderer = {
     return `
       <div data-market-id="${market.id}" class="market-card block rounded border border-[#1a1f2b] bg-[#0a0d14] p-2.5"${tooltip}>
         <a href="${market.url}" target="_blank" rel="noopener" class="block mb-1.5">
-          <span class="inline-block px-1.5 py-0.5 rounded bg-indigo-950/50 text-[10px] text-indigo-300 font-mono uppercase mb-1">MULTI-OUTCOME</span>
+          <span class="inline-block px-1.5 py-0.5 rounded bg-indigo-950/50 text-[10px] text-indigo-300 font-mono uppercase mb-1" title="This is one event with several possible winners, not a simple yes/no question — odds below are ranked by likelihood.">MULTI-OUTCOME</span>
           <div class="text-[13px] text-slate-200 font-medium line-clamp-2">${this.escapeHTML(market.question)}</div>
         </a>
         <div class="flex flex-col gap-1 mb-1.5">${outcomeRows}</div>
@@ -257,13 +257,14 @@ const Renderer = {
   },
 
   renderWhaleTrade(t) {
-    const sideColor = /yes|buy/i.test(t.outcome) ? 'text-emerald-400' : 'text-rose-400';
+    const sideColor = /buy/i.test(t.side) ? 'text-emerald-400' : 'text-rose-400';
     const who = t.pseudonym ?? (t.wallet ? `${t.wallet.slice(0, 6)}…${t.wallet.slice(-4)}` : 'anon');
+    const label = [t.side, t.outcome].filter(Boolean).join(' ');
     return `
       <li class="border-b border-[#141925] pb-2 mb-2 last:border-0">
         <div class="text-[13px] text-slate-300 line-clamp-2 leading-snug">${this.escapeHTML(t.market)}</div>
         <div class="flex items-center gap-2 mt-1 text-[11px] text-slate-600 font-mono">
-          <span class="${sideColor} uppercase">${this.escapeHTML(t.outcome || '')}</span>
+          <span class="${sideColor} uppercase">${this.escapeHTML(label)}</span>
           <span>&middot;</span>
           <span class="text-slate-300">$${this.formatNumber(t.usdValue)}</span>
           <span>&middot;</span>

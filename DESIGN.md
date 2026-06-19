@@ -394,6 +394,62 @@ back empty/wrong.
 - **WebSocket real-time feed / Goldsky subgraph:** bigger architectural
   changes, already tracked under Phase 2+ in §13.
 
+## 18. v4 Additions — Keyset Migration, Data API Corrections, Plain-Language Narration
+
+Built in response to a research pass on how to read Polymarket's APIs more
+efficiently and make the narrative text readable by someone with no trading
+background.
+
+- **Gamma keyset migration (`js/polymarket.js`):** Gamma's legacy `/markets`
+  and `/events` list endpoints are sunset 2026-05-01 in favor of cursor-based
+  `/markets/keyset` and `/events/keyset`. All four fetchers
+  (`fetchMarketsForCategory`, `fetchTrending`, `fetchResolvedForCategory`,
+  `fetchResolvedTrending`) now call the `/keyset` paths through a shared
+  `fetchKeyset()` helper that parses the response as `{ data: [...] }` (or a
+  bare array, defensively). We only ever fetch the first page — no pagination
+  beyond it, matching the app's existing single-shot fetch behavior — so the
+  cursor parameter itself is unused and its exact name was never resolved
+  (sources disagree between `after_cursor` and `cursor`; a tracked upstream
+  bug also reports the cursor being ignored server-side). The keyset
+  endpoints' support for `order`/`ascending` query params is unconfirmed, so
+  those params were dropped and replaced with equivalent client-side
+  `.sort()` calls before `.slice()` (by volume, or by `endDate` for resolved
+  markets).
+- **Data API field corrections (`js/dataapi.js`):** the v3 round's
+  best-effort field guesses are now corrected against Polymarket's documented
+  schema:
+  - `/holders` takes `market=<conditionId>` (not a CLOB token id) and returns
+    one holder group per outcome token — `[{ token, holders: [...] }]` — not
+    a flat array. `fetchHolders` now takes a `conditionId` param, flattens the
+    groups, and sorts the merged holders by `amount` descending.
+    `normalizeHolder` now reads only confirmed fields: `proxyWallet`,
+    `pseudonym`/`name`/`displayUsernamePublic`, `amount`, `outcomeIndex`.
+  - `/trades` has no `usdcSize` field — `usdValue` is now computed directly
+    as `price * size` rather than guessing at a nonexistent field.
+    `outcome` and `side` are two distinct real fields (previously collapsed
+    into one fallback chain) and are now kept separate; the whale feed shows
+    both (e.g. "BUY YES") and colors by `side`, not `outcome`.
+  - Call sites updated: `js/app.js`'s `loadDivergenceEnrichment` now passes
+    `market.conditionId` to `fetchHolders`.
+- **Plain-language narration (`js/narrative.js`):** market and category
+  sentences now say "traders think there's about a 73% chance" instead of
+  "73% odds," to avoid implying a betting payout. Liquidity and contested
+  notes were reworded in plain terms (e.g. "easy to get in or out" instead of
+  "liquidity"). Jargon badges in `js/renderer.js` (LIQ, VOL, SPREAD,
+  CONTESTED, MULTI-OUTCOME) gained `title` tooltip glosses explaining what
+  each term means on hover.
+
+### Confidence notes for this round
+
+The cursor parameter name/behavior on `/markets/keyset` and `/events/keyset`
+could not be verified directly — Polymarket's own docs site consistently
+returned 403 to this session's fetch tooling, so findings here are based on
+cross-validated search snippets, not a live response. Since this app never
+paginates past the first page, this gap doesn't block current functionality,
+but it should be revisited before any future pagination work. Likewise,
+`order`/`ascending` support on the keyset endpoints is unconfirmed (dropped
+in favor of client-side sorting, which is strictly safer regardless).
+
 ---
 
 *Generated for Claude Code. All APIs free. No backend. No wallet. No trading.*

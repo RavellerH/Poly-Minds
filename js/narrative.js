@@ -3,17 +3,19 @@
 const Narrative = {
   buildMarketSentence(market) {
     const pct = Math.round(market.probability * 100);
-    const trend = market.change24h > 0 ? 'rising to' : market.change24h < 0 ? 'falling to' : 'holding at';
+    const moveDesc = market.change24h > 0 ? 'up' : market.change24h < 0 ? 'down' : 'unchanged';
+    const movePct = Math.abs(Math.round(market.change24h * 1000) / 10);
+    const moveNote = moveDesc === 'unchanged' ? '' : ` That's ${moveDesc} ${movePct} points over the last day.`;
     const liquidityNote = market.liquidity > 0
-      ? ` Backed by $${Renderer.formatNumber(market.liquidity)} liquidity.`
+      ? ` There's $${Renderer.formatNumber(market.liquidity)} ready to trade on this market, so it's easy to get in or out.`
       : '';
     const momentumNote = market.volume1wk > 0 && market.volume1wk > market.volume24h * 3
-      ? ` Weekly volume ($${Renderer.formatNumber(market.volume1wk)}) is well ahead of its daily pace — interest is building.`
+      ? ` More people have been trading this lately — interest is building.`
       : '';
     const contestedNote = market.competitive != null && market.competitive >= 0.7
-      ? ' This one is a tightly contested, near-coinflip market.'
+      ? ' Traders are about evenly split here — it could go either way.'
       : '';
-    return `Markets give ${pct}% odds: "${market.question}" — probability ${trend} ${pct}% in the last 24h.${liquidityNote}${momentumNote}${contestedNote}`;
+    return `Traders think there's about a ${pct}% chance: "${market.question}".${moveNote}${liquidityNote}${momentumNote}${contestedNote}`;
   },
 
   // Related markets: same category, excluding the one being shown.
@@ -61,10 +63,10 @@ const Narrative = {
     const avgProb = markets.reduce((sum, m) => sum + m.probability, 0) / markets.length;
     const top = [...markets].sort((a, b) => b.volume - a.volume)[0];
     const upCount = markets.filter((m) => m.change24h > 0).length;
-    const momentum = upCount > markets.length / 2 ? 'bullish lean' : 'bearish lean';
+    const momentum = upCount > markets.length / 2 ? 'leaning more "yes" than usual' : 'leaning more "no" than usual';
     return `${label}: ${markets.length} active markets, ${momentum} ` +
-      `(avg ${Math.round(avgProb * 100)}% yes), top signal: ` +
-      `"${top.question}" at ${Math.round(top.probability * 100)}%.`;
+      `(averaging ${Math.round(avgProb * 100)}% chance of "yes"), the most-traded one is: ` +
+      `"${top.question}" at ${Math.round(top.probability * 100)}% chance.`;
   },
 
   buildSummary(categoryData) {

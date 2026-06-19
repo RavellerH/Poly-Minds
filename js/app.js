@@ -112,7 +112,7 @@ const App = {
     const targets = divergences.slice(0, CONFIG.DIVERGENCE_HOLDER_LOOKUP_LIMIT);
     await Promise.allSettled(
       targets.map(async ({ market }) => {
-        const result = await Promise.allSettled([DataAPI.fetchHolders(market.yesTokenId, 3)]);
+        const result = await Promise.allSettled([DataAPI.fetchHolders(market.conditionId, 3)]);
         if (result[0].status === 'fulfilled') {
           Renderer.renderDivergenceHolderNote(market.id, result[0].value);
         }
