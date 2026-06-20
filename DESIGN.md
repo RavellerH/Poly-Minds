@@ -508,6 +508,35 @@ digests without standing up a server.
   scheduled or manually-dispatched run in GitHub Actions should be watched
   closely** (Actions run logs) before trusting the alerts.
 
+### 19.1 On-page alert panel (HOURLY ALERTS sidebar card)
+
+Telegram's bot token can never live in client-side JS — anyone opening dev
+tools on the public GitHub Pages site could read it and hijack the bot — so
+the alert deliveries themselves stay entirely server-side. To still make
+those alerts visible on the page, `collect.py` now also writes a rolling,
+non-secret log:
+
+- `record_alert_log(moves, timestamp)` in `automation/collect.py` appends an
+  entry (`{timestamp, moves: [{question, url, probability, deltaPct}, ...]}`)
+  to `data/alerts.json` every time `find_moves()` detects an `ALERT_THRESHOLD_PCT`
+  move, capped at the most recent `MAX_ALERT_LOG_ENTRIES` (50) entries. This
+  runs alongside (not instead of) `telegram.send(...)`, so the same data
+  reaches both channels. `hourly.yml` now also commits `data/alerts.json`.
+- `js/automationAlerts.js` (`AutomationAlerts.fetchLog`) does a same-origin
+  `fetch('data/alerts.json')` — no token, no secret, safe for the browser —
+  failing closed to `[]` on any error.
+- `js/renderer.js`'s `renderAutomationAlerts` renders the 5 most recent
+  non-empty entries into the new `#automation-alerts` sidebar card
+  ("HOURLY ALERTS" in `index.html`), styled like the existing Whale
+  Moves/News Feed cards.
+- **This is explicitly hourly-cadence, not realtime** — the panel's title
+  carries a tooltip saying so. The dashboard's actually-realtime alerting
+  remains the pre-existing 60s client-side Divergence Alert Strip
+  (`Narrative.findDivergences`, §6.6), which is unrelated to this automation
+  layer and was already live before this round.
+- Seeded `data/alerts.json` with `[]` so the fetch succeeds (empty list)
+  before the first Action run ever populates it.
+
 ### Setup required (not yet done)
 
 1. Create a Telegram bot via `@BotFather`, get the bot token.

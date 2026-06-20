@@ -7,6 +7,7 @@ const App = {
     trendingMarkets: [],
     news: [],
     whaleTrades: [],
+    automationAlerts: [],
     stale: false,
   },
 
@@ -21,6 +22,7 @@ const App = {
       marketGrid: document.getElementById('market-grid'),
       newsFeed: document.getElementById('news-feed'),
       whaleFeed: document.getElementById('whale-feed'),
+      automationAlerts: document.getElementById('automation-alerts'),
       narrativeSummary: document.getElementById('narrative-summary'),
       calibrationPanel: document.getElementById('calibration-panel'),
       divergenceStrip: document.getElementById('divergence-strip'),
@@ -129,7 +131,7 @@ const App = {
     this.els.refreshSpinner?.classList.remove('hidden');
     let stale = false;
 
-    const [categoryResults, trendingResult, newsResult, whaleResult] = await Promise.allSettled([
+    const [categoryResults, trendingResult, newsResult, whaleResult, automationAlertsResult] = await Promise.allSettled([
       Promise.allSettled(
         CONFIG.INTEREST_TAGS.primary.map(async (cat) => {
           const result = await Polymarket.fetchMarketsForCategory(cat);
@@ -140,6 +142,7 @@ const App = {
       Polymarket.fetchTrending(),
       News.fetchAll(),
       DataAPI.fetchWhaleTrades(),
+      AutomationAlerts.fetchLog(),
     ]);
 
     if (categoryResults.status === 'fulfilled') {
@@ -163,6 +166,7 @@ const App = {
     } else {
       this.state.whaleTrades = [];
     }
+    this.state.automationAlerts = automationAlertsResult.status === 'fulfilled' ? automationAlertsResult.value : [];
     this.state.stale = stale;
 
     this.renderAll();
@@ -178,6 +182,7 @@ const App = {
     const allMarkets = this.allKnownMarkets();
     Renderer.renderNewsFeed(this.els.newsFeed, this.state.news, allMarkets);
     Renderer.renderWhaleFeed(this.els.whaleFeed, this.state.whaleTrades);
+    Renderer.renderAutomationAlerts(this.els.automationAlerts, this.state.automationAlerts);
     Renderer.renderNarrativeSummary(this.els.narrativeSummary, this.state.categoryData);
 
     const divergences = Narrative.findDivergences(allMarkets, this.state.news);

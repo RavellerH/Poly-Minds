@@ -290,6 +290,46 @@ const Renderer = {
     el.innerHTML = `<ul>${news.map((n) => this.renderNewsItem(n, allMarkets)).join('')}</ul>`;
   },
 
+  renderAutomationAlerts(el, log) {
+    if (!log.length) {
+      el.innerHTML = `<div class="text-slate-500 text-sm font-mono">NO HOURLY ALERTS YET.</div>`;
+      return;
+    }
+    const entries = [...log].reverse().filter((entry) => entry.moves?.length);
+    if (!entries.length) {
+      el.innerHTML = `<div class="text-slate-500 text-sm font-mono">NO PROBABILITY SHIFTS DETECTED LAST RUN.</div>`;
+      return;
+    }
+    el.innerHTML = `<ul>${entries
+      .slice(0, 5)
+      .map((entry) => this.renderAutomationAlertEntry(entry))
+      .join('')}</ul>`;
+  },
+
+  renderAutomationAlertEntry(entry) {
+    const moves = entry.moves
+      .slice(0, 5)
+      .map((m) => {
+        const sign = m.deltaPct > 0 ? '+' : '';
+        const color = m.deltaPct > 0 ? 'text-emerald-400' : 'text-rose-400';
+        return `
+          <li class="mt-1.5">
+            <a href="${m.url}" target="_blank" rel="noopener" class="text-[13px] text-slate-300 hover:text-slate-100 line-clamp-2 leading-snug">${this.escapeHTML(m.question)}</a>
+            <div class="text-[11px] font-mono mt-0.5">
+              <span class="${color}">${sign}${m.deltaPct}pp</span>
+              <span class="text-slate-600">&middot;</span>
+              <span class="text-slate-500">now ${Math.round(m.probability * 100)}%</span>
+            </div>
+          </li>`;
+      })
+      .join('');
+    return `
+      <li class="border-b border-[#141925] pb-2 mb-2 last:border-0">
+        <div class="text-[11px] text-slate-600 font-mono">${this.timeAgo(entry.timestamp)}</div>
+        <ul>${moves}</ul>
+      </li>`;
+  },
+
   renderNarrativeSummary(el, categoryData) {
     el.textContent = Narrative.buildSummary(categoryData);
   },

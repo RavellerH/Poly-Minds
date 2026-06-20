@@ -11,7 +11,9 @@ from datetime import datetime, timezone
 from lib import gamma, telegram
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "snapshots")
+ALERTS_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "alerts.json")
 ALERT_THRESHOLD_PCT = 8  # matches the dashboard's DIVERGENCE_THRESHOLD_PCT
+MAX_ALERT_LOG_ENTRIES = 50
 
 
 def build_snapshot():
@@ -59,6 +61,31 @@ def find_moves(previous, current):
     return moves
 
 
+def record_alert_log(moves, timestamp):
+    log = []
+    if os.path.exists(ALERTS_PATH):
+        with open(ALERTS_PATH) as f:
+            log = json.load(f)
+
+    entry = {
+        "timestamp": timestamp.isoformat(),
+        "moves": [
+            {
+                "question": m["market"]["question"],
+                "url": m["market"]["url"],
+                "probability": m["market"]["probability"],
+                "deltaPct": m["deltaPct"],
+            }
+            for m in moves
+        ],
+    }
+    log.append(entry)
+    log = log[-MAX_ALERT_LOG_ENTRIES:]
+
+    with open(ALERTS_PATH, "w") as f:
+        json.dump(log, f, indent=2)
+
+
 def format_alert(moves):
     lines = [f"*Polymarket Pulse — {len(moves)} probability shift(s) ≥ {ALERT_THRESHOLD_PCT}pp this hour*"]
     for m in moves[:10]:
@@ -85,6 +112,7 @@ def main():
 
     moves = find_moves(previous, current)
     if moves:
+        record_alert_log(moves, now)
         telegram.send(format_alert(moves))
     else:
         print("[collect] no moves above threshold")
